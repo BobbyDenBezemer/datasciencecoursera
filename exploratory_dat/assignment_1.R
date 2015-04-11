@@ -41,13 +41,13 @@ plot(data1$Time3, data1$Sub_metering_1, type = "l",
 lines(data1$Time3, data1$Sub_metering_2, col = "red", type = "l") +
 lines(data1$Time3, data1$Sub_metering_3, col = "blue", type = "l")
 # adding the legend
-par(cex = .64)
+par(cex = .70)
 legend("topright", lty = 1, col = c("black", "blue", "red"),text.font = 1,
        legend = c("Sub_metering_1", "Sub_metering_2", "Sub_metering_3"))
 
 # Making the fourth plot: A facetted plot
 par(mfrow = c(2, 2))
-par(cex = .64)
+par(cex = .70)
 with(data1, {
   # Making the first line graph
   plot(x = Time3, y = Global_active_power, type = "l",
