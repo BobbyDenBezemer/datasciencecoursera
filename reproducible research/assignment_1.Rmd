@@ -1,0 +1,175 @@
+---
+title: "Assignment1"
+author: "Bobby den Bezemer"
+date: "Tuesday, April 14, 2015"
+output: html_document
+---
+
+## Introduction to the dataset
+
+This assignment deals with a dataset collected on personal movement. The data has been collected on 1 individual. It consists of two months of data that has been collected on a 5 minute interval. 
+
+## Loading and preprocessing the data
+
+This step deals with loading and preprocessing the data. It loads the data using read.csv. Furthermore it preporcess the dates that are loaded and converts them to a date class.
+
+```{r, echo = TRUE}
+data <- read.csv("activity.csv")
+
+# parsing data column as date
+data$date = as.Date(strptime(data$date,
+                       format = "%Y-%m-%d"))
+```
+
+## Calculating means
+
+This step deals with calculating the mean number of steps taken each day. It furthermore plots the distribution using a histogram.
+
+```{r, echo = TRUE, message=FALSE,warning=FALSE}
+# Loading the packages
+library(ggplot2)
+library(dplyr)
+library(grid)
+
+# group by day and compute mean per day
+data_day <- data %>%
+  group_by(date) %>%
+  filter(!is.na(steps)) %>%
+  summarise(total = sum(steps, na.rm = TRUE))
+
+# histogram of total number of steps per day
+ggplot(data = data_day, aes(x = total)) + 
+  geom_bar() +
+  scale_x_continuous("total number of steps per day") +
+  geom_vline(xintercept = mean(data_day$total, na.rm = TRUE),
+             col = "red", size = 1.2) +
+  geom_vline(xintercept = median(data_day$total),
+             col = "red", size = 1.2) +
+  geom_segment(aes(x = 6000, y = 8, xend = 9200, yend = 7)
+               ,arrow = arrow(length = unit(0.5, "cm")),
+               linetype = 1, size = 1.2) +
+  annotate("text", x = 6000, 
+                y = 8.4, label = "mean", angle=0, size=5, 
+                colour='black', face="bold") +
+  geom_segment(aes(x = 13800, y = 8, xend = 10600, yend = 7)
+               ,arrow = arrow(length = unit(0.5, "cm")),
+               linetype = 1, size = 1.2) +
+  annotate("text", x = 14500, 
+                y = 8.4, label = "median", angle=0, size=5, 
+                colour='black', face="bold") +
+  theme_bw()
+
+# average over all days
+mean(data_day$total, na.rm = TRUE) # 9354.23
+
+
+# median of steps taken per day
+median(data_day$total) # 10395
+```
+
+In this exercise, the missing values are filtered out of the analysis. If you look at the distribution of mean number of steps taken each day, it looks roughly normal. It is mostly centered around 10.000 steps. 
+
+In addition, as you can see both see in the visualization as well as you can see in the calculations, the mean number of steps taken per day is 9354.23 while the median number of steps taken per day is 10395.
+
+## The average daily pattern
+
+This section deals with the average daily pattern of steps. Below a time series plot shows how the 
+
+```{r, echo = TRUE}
+# Loading required package
+library(scales)
+
+# Making a 5 minute sequence of an entire day. This sequence becomes character
+num_intervals = (24 * 60) / 5 # 288 per day
+
+times = format(seq(as.POSIXct(Sys.Date()), as.POSIXct(Sys.Date() + 1), 
+                   by="5 min"), "%H%M", tz = "GMT")[1:288]
+
+# Adding this interval to every day of the data frame
+data$daily_interval = rep(times, times = 61)
+
+# now group by the daily interval variable
+data_interval <- data %>%
+  group_by(daily_interval) %>%
+  summarise(average = mean(steps,na.rm = TRUE))
+
+# Make a time series plot. The x variable is stripped to POSIXt
+ggplot(data = data_interval, aes( x = strptime(daily_interval, "%H%M"),
+                                  y = average, group = 1))  +
+  geom_line() +
+  # the x axis is then formatted to 2 hourly breaks.
+  # for the labels I only want the hours
+  scale_x_datetime("Hours", breaks = date_breaks("2 hours"), 
+                   labels = date_format("%H")) +
+  scale_y_continuous("Average number of steps") +
+  theme_bw()
+
+```
+
+As you can see, the maximum average number of steps is between 8 and 10 in the morning. Some other peaks are around noon, the late afternoon and the early evening.
+
+```{r, echo=TRUE}
+## Show the top 5 time intervals
+data_interval %>%
+  arrange(desc(average)) %>%
+  slice(1:5)
+
+```
+
+Above it plotted the top 5 intervals in terms of number of steps taken. As you can see, the top interval is from 8.35-8.40. All other top intervals are all in the 8.30-9.00 range.
+
+## Imputing missing values
+
+This section deals with imputing the missing values for steps. It used the mean value per interval to impute these missing values.
+
+```{r, echo = TRUE}
+
+# calculate number of missing values
+num_missing = sum(is.na(data$steps)) # 2304 intervals have missing data
+
+# impute mean per interval
+data_mean <- data %>%
+  group_by(interval) %>%
+  summarise(med = mean(steps, na.rm = TRUE))
+
+
+# find rows where steps is na and match them with imputed values
+data$steps[is.na(data$steps)] = data_mean[match(data$interval[is.na(data$steps)], data_mean$interval),2][[1]]
+
+
+```
+
+## Differences in activity patterns on weekends and weekdays
+
+This section deals with the difference in activity patttern between weekdays and the weekend.
+
+
+```{r, echo=TRUE}
+
+# getting the days of the week and making a factor variable for weekend
+# or weekday
+week_day <- weekdays(data$date)
+weekend = c("zondag","zaterdag")
+week_day = ifelse(week_day %in% weekend, "weekend", "week_day")
+data$week_day = factor(week_day)
+
+# group by interval again
+data_interval <- data %>%
+  group_by(daily_interval,week_day) %>%
+  summarise(average = mean(steps, na.rm = TRUE))
+
+# Making time series plot for weekdays and weekends
+ggplot(data_interval, aes( x = strptime(daily_interval, "%H%M"),
+                           y = average, group = 1))  +
+  geom_line() +
+  # the x axis is then formatted to 2 hourly breaks.
+  # for the labels I only want the hours
+  scale_x_datetime("Hours", breaks = date_breaks("2 hours"), 
+                   labels = date_format("%H")) +
+  scale_y_continuous("Average number of steps") +
+  facet_wrap(~week_day, nrow = 2) +
+  theme_bw()
+
+```
+
+As you can see on the panel plot above, the activity pattern on a weekday has a much higher peak. Here there is a sharp peak between 8 and 9. On weekends there is less of a peak. There exists a more gradual pattern that slowly fades in the wake of evening.
