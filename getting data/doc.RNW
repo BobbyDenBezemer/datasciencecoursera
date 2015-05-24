@@ -1,0 +1,126 @@
+\documentclass{article}
+\usepackage{pslatex,graphicx,color}
+\newcommand{\indep}{\rotatebox[origin=c]{90}{$\models$}}
+\usepackage[english]{babel}
+\usepackage[margin=2cm]{geometry}
+\usepackage{mathtools}
+\usepackage{float}
+<<setup, include=FALSE, cache=FALSE>>=
+library(knitr)
+# set global chunk options
+opts_chunk$set(echo = FALSE)
+@
+\begin{document}
+\title{KTO scores per proces}
+\author{Bobby den Bezemer\\
+  \texttt{B.denbezemer@my-call.nl}}
+\date{\today}
+\maketitle
+
+\section{Inleiding}
+Het onderstaande document geeft het verband weer tussen klantenservice processen en de KTO vriendelijkheidsscores. Allereerst wordt er naar de distributie van de vriendelijkheidsscores gekeken. Vervolgens wordt er gekeken hoeveel variatie in vriendelijkheidsscores bepaald wordt door het proces. Daarna zal er op een paar processen ingezoomd worden. Dit betreft processen die hoger dan gemiddeld beoordeeld worden op vriendelijkheid (abonnementswijzigingen en simkaarten) en processen die lager dan gemiddeld beoordeeld worden op vriendelijkheid (automated dunning en klantverificatie), en subprocessen waarvan we meer dan 25 vriendelijkheidsscores bezitten. Verder wordt er een outlier analyse gedaan. Het document sluit af met een aantal aanbevelingen. 
+<<eval = TRUE,warning = FALSE,message=FALSE,fig.height=4,fig.width=7,fig.align='center'>>=
+data1<-read.csv("Map1.csv",sep = ";")
+library(ggplot2)
+for (i in 1:nrow(data1)){
+  if (data1$code1[i] == "st"){
+    data1$code1[i] = "kv"
+  }
+}
+
+# make a histrogram of density
+ggplot(data = data1, aes(x = Vriendelijkheid)) +
+  geom_bar() + 
+  ylab("Aantal") + xlab("Vriendelijkheid score")
+@
+\section{Distributie vriendelijkheidsscores}
+Zoals hierboven te zien is vertoond de verdeling van de vriendelijkheidsscores erg veel skew (scheefheid). Dat wil zeggen dat de meeste scores zo tussen de 6-10 vallen, maar dat enkele scores hier erg ver van af liggen. In het geval dat je distributie veel skew vertoont, wordt het gemiddelde erg vertekend door outliers. Dit zijn extreme waarden die je gemiddelde disproportioneel naar beneden halen. Het is in zo'n geval aan te raden om de mediaan (de middelste waarde) te gebruiken in plaats van het gemiddelde. 
+
+\section{Vriendelijkheidsscores en processen}
+In de vorige paragraaf is gekeken naar de algemene verdeling van vriendelijkheidsscores. In de huidge paragraaf wordt er gekeken in hoeverre het proces waarover een klant belt de vriendelijkheidsscores die hij geeft beinvloed. Om dit te onderzoeken hebben we een variantie analyse gedaan (ANOVA) waarbij vriendelijkheid de afhankelijke variabele is en het proces de onafhankelijke variabele. Proces blijkt een significante hoeveelheid variantie in vriendelijkheidsscores te bepalen $\emph{F} (27, 2291) = 9.98, \emph{p} < .001$. De hoeveelheid verklaarde variantie (Multiple R squared) bedraagt 8.26 \%.  
+<<eval = FALSE>>=
+summary(lm(Vriendelijkheid ~ code1,data = data1))
+@
+In de voorgaande paragraaf is gekeken in hoeverre de variabele proces de vriendelijkheidsscores kan verklaren. In de de volgende paragraaf wordt er ingezoomed op 4 processen, waarvan twee processen een hoog gemiddelde vriendelijkheidsscores vertonen en twee processen een lage vriendenlijkheidsscore hebben. \\
+<<eval = TRUE,fig.align='center',fig.height=4,fig.width = 7,warning=FALSE,comment=NA,message=FALSE>>=
+suppressWarnings(library(plyr))
+suppressWarnings(library(dplyr))
+suppressWarnings(library(ggplot2))
+suppressWarnings(library(gridExtra))
+data2 <- filter(data1, code1 == "kv" | code1 == "ad" | code1 == "aw" | code1 == "ss")
+
+data3 <- ddply(data2,"code1",summarise,
+               mean_vriend = mean(Vriendelijkheid),
+               median_vriend = median(Vriendelijkheid),
+               mean_deskundig = mean(Deskundigheid),
+               median_deskundig = median(Deskundigheid))
+
+a<-ggplot(data = data3, aes(x = code1, y = mean_vriend)) +
+  geom_bar(width = 0.7,stat = "identity", position = position_dodge(),fill = rainbow(4)) +
+  xlab("Proces op flow niveau") + ylab("Gemiddelde vriendelijkheid")
+
+b<-ggplot(data = data2, aes(x = code1, y = Vriendelijkheid)) +
+  geom_boxplot() + ylab("") +
+  xlab("Proces op flow niveau")
+
+grid.arrange(arrangeGrob(a,b,nrow=1,ncol=2),main = textGrob("Gemiddelde en mediaan vriendelijkheid \n per proces op flow niveau"))
+@
+Zoals je kan zien op de linker afbeelding is er een redelijk verschil in de gemiddelde vriendelijkheid per proces. De processen simkaarten en abonnementswijzigingen scoren gemiddeld hoger dan het automated dunning en klantverificatie proces. Kijk je in het boxplot ernaast dan zie je echter dat automated dunning en abonnementswijzigingen dichter bij elkaar liggen. In dit boxplot plot is de mediaan weergeven door middel van de horizontale streep. Alle puntjes aan de onderkant van de verschillende boxplots zijn outliers per proces (extreme waardes). De reden dat de vriendelijkheidsscores per proces nu dichter bij elkaar liggen komt doordat de mediaan beter bestendig is tegen outliers dan het gemiddelde. Gemiddelden worden namelijk buitenproportioneel beinvloed door extreme scores, zoals een 0 of een 1 op vriendelijkheid. Doordat de mediaan beter bestendig is tegen dergelijke extreme scores, vormt het een meer solide afspiegeling van de werkelijke vriendelijkheidsscores. Het enige nadeel aan de mediaan in dit geval is dat klanten een geheel getal geven als beoordeling van de vriendelijkheid. Zij geven een bijvoorbeeld een 8 of een 9, in plaats van een cijfer met een decimaal. De mediaan zal dan ook altijd een heel getal zijn in plaats van een getal met decimaal.
+
+Hieronder wordt verder gegaan op een analyse betreffende de specifieke eindpunten binnen flows waarvoor er meer dan 25 vriendelijkheidsscores zijn. 
+
+<<eval = TRUE,fig.height=4.5,fig.width=7>>=
+# alle eindpunten groter dan 25x afgeboekt
+# hoeveel variantie wordt er verklaard door een agent??
+data4 <- group_by(data1, code)
+data5 <- summarise(data4, 
+                   count = n() )
+# deze waarden hebben er meer dan 25 per eindcode.
+data5 <- filter(data5, count >= 25)
+
+# we filteren vervolgens op die eindpunten in data6
+data6 <- filter(data1, code == "ae021" | code == "ak021" | code == "bo20w" | 
+                 code == "bt020" | code == "kv002" | code =="kv342" | code == "kv812" |
+                  code =="mh031" |
+                  code == "nb352" | code == "sa025" | code == "sa681" | code == "sa683" |
+                  code == "ss732" | code == "ti238" | code == "tp107" | 
+                  code == "tv018")
+
+data7 <- group_by(data6,code)
+data7 <- summarise(data7,
+               mean_vriend = mean(Vriendelijkheid),
+               median_vriend = median(Vriendelijkheid),
+               mean_deskundig = mean(Deskundigheid),
+               median_deskundig = median(Deskundigheid),
+               count = n())
+               
+ggplot(data = data7, aes(x = code, y = mean_vriend)) +
+  geom_bar(width = 0.7,stat = "identity", position = position_dodge(),fill = gray) +
+  xlab("Proces") + ylab("Gemiddelde vriendelijkheid") +
+  ggtitle("Vriendelijkheid per proces") +
+  geom_abline(intercept = mean(data1$Vriendelijkheid),slope = 0,colour = rainbow(1),lwd = 1.5)
+
+ggplot(data = data6, aes(x = code, y = Vriendelijkheid)) +
+  geom_boxplot() 
+@
+Het barplot hierboven plot het gemiddelde per proces. De rode streep geeft de algemeen gemiddelde vriendelijkheidsscore weer. Zoals duidelijk wordt uit het barplot en uit het boxplot worden met name de processen omtrent de klantverificatie erg laag door klanten beoordeeld. Dit betreft allereerst het proces geen gehoor, waarbij de verbinding met de klant wegvalt of waarbij de verbinding van dermate laag niveau is dat er geen vervolg gegeven wordt aan het gesprek. Daarnaast betreft dit het proces dat klant niet door de klant verificatie komt en / of dat een vraag wegens privacy niet beantwoord mag worden. Aan het eerste is mijns inziens weinig te veranderen. Het tweede punt toont wel een erg strenge klant verificatie aan die door veel klanten dus niet gewaardeerd wordt. De boxplots hierboven tonen door middel van de puntjes aan dat er ook op proces basis flink wat outliers zijn.  
+
+\section{Outlier Analyse}
+Er zijn verschillende manieren waarop outliers gedetecteerd kunnen worden. 1 manier is het berekenen van de inter quartile range. Dit is het gebied waarin 50\% van de waarden zich bevindt. Indien een waarde kleiner of groter is dan 1.5 * de inter quartile range, dan is dit een outlier. Het eerste kwartiel voor vriendelijkheid is 7. Het 3e kwartiel bedraagt 10. De range tussen beide kwartielen bedraagt dus 3 (10 - 7 = 3). Lichte outliers op het gebied van vriendelijkheid bedragen dus scores lager dan 7 - 3 * 1.5 = 2.5. Daar er alleen beoordeeld wordt op hele scores, zou je op die manier alle scores met een 2 of lager eruit kunnen filteren. Uiteraard zou je ook een specifieke outlier analyse p proces / flow basis kunnen doen. Daar het proces waarover een klant belt een significante voorspeller is van de vriendelijkheid score, kan dit zeker relevant zijn. Indien alle scores lager dan een 2 eruit gehaald worden, dan brengt dit de gemiddelde vriendelijkheidsscore van een 7.88 naar een 8.20. Een kanttekening dient hier nog wel geplaatst te worden bij het feit dat er ook andere outlier detectie methodes zijn. Zo kan er gebruik gemaakt worden van bepaalde algoritmes of van Z waarden bij het bepalen op bepaalde waardes outliers zijn.
+<<eval = TRUE, fig.height=4.5,fig.width=7>>=
+data10 <- subset(data1, Vriendelijkheid > 2)
+@
+\section{Aanbevelingen}
+In dit stuk wordt een aantal aanbevelingen gedaan.
+\begin{enumerate}
+  \item Daar de verdeling van de vriendelijkheidsscores erg scheef is (left skewed), kan er beter gekeken worden naar de mediaan dan het gemiddelde. Om een mediaan te krijgen die op 1 decimaal afgerond is, dien je wel de klant de mogelijk te geven om op 1 decimaal afgerond hun cijfer te geven. 
+  \item De door de klant gegeven vriendelijkheidsscores zijn erg afhankelijk van het proces waarover een klant belt. 
+  \begin{itemize}
+  \item Het is dan eigenlijk niet juist om een beoordeling te maken op alleen vriendelijkheidsscores zonder de processen in overweging te nemen. Mycall wordt dan namelijk afgerekend op het feit dat een klant zich slachtoffer voelt van het proces in plaats van hoe vriendelijk de betreffende medewerker was. Je meet dus eigenlijk iets heel anders dan je dient te meten. 
+  \item Indien je doel is om de klanttevredenheidscijfers omhoog te krijgen, zou je laag beoordeelde processen kunnen beoordelen op verbeterpunten. Dit zou bijvoorbeeld gedaan kunnen worden door middel van een kwalitatieve analyse van de inhoud van het invoerveld in hermes. Hier dienen agents een boodschap achter te laten wanneer een klant niet naar tevredenheid geholpen is.
+  \end{itemize}
+  \item Om toch te voorkomen dat er beslissingen genomen worden op gemiddelde die vertekend zijn door outliers, kan er een outlier analyse gedaan worden. Outliers kunnen dan gefilterd worden zodat er op een betrouwbaardere manier de KTO geevalueerd wordt. Op dit gedetailleerder te doen, zou er zelfs gekeken worden naar een outlier analyse per proces. Hiervoor dient er wel genoeg data beschikbaar te zijn op proces basis.
+\end{enumerate}
+
+
+\end{document}
