@@ -1,0 +1,202 @@
+---
+title: 'Final project: Regression'
+author: "Bobby den Bezemer"
+date: "19 augustus 2015"
+header-includes:
+   - \usepackage{bbm}
+   - \usepackage[english]{babel}
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{caption}
+   - \usepackage{subcaption}
+   - \usepackage{amsmath}
+   - \usepackage{graphicx}
+   - \usepackage{float}
+output: 
+  pdf_document:
+    fig_caption: yes
+---
+```{r, echo = FALSE, warning = FALSE}
+library(knitr)
+opts_chunk$set(fig.width = 3, fig.height = 3, warning = FALSE, message = FALSE)
+opts_chunk$set(fig.path = "figures/", dev='pdf')
+```
+
+\begin{abstract}
+The current article proposes two models on the relationship between fuel efficiency (miles per gallon), car type and car weight. It concludes that a model consisting of car type, car weight and an interaction between car weight and type best explains the fuel efficiency of a car. Future research may expand the current model by including additional variables such as number of gears and cylinders.
+\end{abstract}
+
+\section{Introduction}
+Motor Trend is the leading magazine on the automobile industry. In this article, we aim to investigate the relationship between different car types and fuel efficiency (miles per gallon). Second, it probes a second model expanding the earlier relationship by including the weight of cars as well as an interaction term of weight and car type. The report itself is written in Rmarkdown and expanded with customized latex. All graphs are included in the text to clarify the points being made to the reader. The reader is therefore suggested to evaluate the size of the paper as though it contains both text and the appendix (so a limit of 5 pages).
+
+\section{Exploratory analyses}
+To explore the data, several graphs have been made. Figure 1 shows the distribution of miles per gallon and the average miles per gallon. As can be seen that, the variable miles per gallon looks roughly normal (although there seems to be a slight deviation).
+
+```{r first_plot, echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
+suppressWarnings(library(ggplot2))
+suppressMessages(library(gridExtra))
+suppressWarnings(library(plyr))
+
+# Making figure 1
+ggplot(data = mtcars, aes(x = mpg)) +
+  geom_bar(binwidth = 1.8) +
+  geom_vline(xintercept = mean(mtcars$mpg, na.rm = TRUE), colour = "red", lwd = 1) +
+  theme_set(theme_gray(base_size = 10)) +
+  theme_bw()
+
+# Doing shapiro test
+normality <- shapiro.test(mtcars$mpg)
+ggplot(data = mtcars, aes(sample = mpg)) + 
+  stat_qq() +
+  geom_abline(intercept = 20, slope = 5) +
+  annotate("text", x = -0.5, y = 32, label = paste("Results Shapiro", 
+                                                " ",round(normality$statistic,2),","," ",
+                                                 round(normality$p.value,2), sep = ""),
+           size = 2.5) +
+  theme_set(theme_bw(base_size = 18)) +
+  theme_bw()
+
+
+```
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \captionsetup{justification=centering}
+  \centering\includegraphics[height=7cm, width=0.95\textwidth]{./figures/first_plot-1}
+  \caption{Histogram of Distribution}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \captionsetup{justification=centering}
+  \includegraphics[height = 7cm, width=.95\textwidth]{./figures/first_plot-2}
+  \caption{Normality plot}
+\end{subfigure}
+\captionsetup{justification=centering}
+\caption{Figure 1}
+\end{figure}
+
+Figure 2 visualizes the effects of the predictors and how they relate to miles per gallon. As can be seen on the left part of figure 2, automatic cars have a higher average miles per gallon than manual cars. The right most part of figure 2 shows the relationships between weight and miles per gallon for both automatic and manual cars. The next section will statistically analyze manual and automatic cars in terms of their miles per gallon.
+
+```{r second_plot, echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
+if (!require("RColorBrewer")) {
+install.packages("RColorBrewer")
+library(RColorBrewer)
+}
+colours = brewer.pal(3,"Blues")
+
+ggplot(data = mtcars,aes(x = factor(am),y = mpg, fill = factor(am))) +
+  geom_bar(stat = 'summary',fun.y = mean, width = 0.7) +
+  scale_y_continuous(name = "Average MPG") +
+  scale_fill_manual(guide = FALSE, values = colours[1:2]) +
+  scale_x_discrete(name = "car types",labels=c("automatic","manual")) +
+  theme_set(theme_bw(base_size = 18)) +
+  theme_bw()
+  
+ggplot(data = mtcars,aes(x = wt, colour = factor(am), y = mpg)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  scale_y_continuous("Miles per Gallon") +
+  scale_x_continuous("Car Weight") +
+  scale_colour_manual("Car type", values = colours[1:2], 
+                    labels = c("Automatic", "Manual")) +
+  theme(legend.position=c(0.75, 0.8),legend.title=element_text(size=12),
+        legend.text = element_text(size = 10), axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12))
+
+```
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \captionsetup{justification=centering}
+  \centering\includegraphics[height=7cm, width=0.95\textwidth]{./figures/second_plot-1}
+  \caption{Average of Mpg per car type}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \captionsetup{justification=centering}
+  \includegraphics[height = 7cm, width=.95\textwidth]{./figures/second_plot-2}
+  \caption{Car type, weight and MPG}
+\end{subfigure}
+\captionsetup{justification=centering}
+\caption{Figure 1}
+\end{figure}
+
+\section{Statistical analyses}
+The previous section explored automatic and manual cars in terms of their miles per gallon. This section will statistically analyze these car types. 
+
+\subsection{Model 1}
+Below is displayed the output of regressing automatic and manual types on mpg.
+
+```{r, echo = FALSE}
+# Doing the regression
+fit1 <- lm(mpg ~ factor(am),data = mtcars)
+
+# Calculating standard deviations
+sd_automatic <- with(subset(mtcars,am == 0), sd(mpg))
+sd_manual <- with(subset(mtcars, am==1), sd(mpg))
+
+# Calculating means
+mean_automatic <- with(subset(mtcars, am == 0), mean(mpg))
+mean_manual <- with(subset(mtcars, am == 1), mean(mpg))
+
+# Making a coefficient table
+coef_table <- summary(fit1)$coef
+
+# Sd table
+sd_table <- rbind(sd_automatic, sd_manual)
+
+# Mean table
+mean_table <- rbind(mean_automatic, mean_manual)
+
+# Combine tables
+table_combined <- cbind(coef_table, sd_table, mean_table)
+colnames(table_combined)[5:6]<-c("Mean","Std. Dev")
+print (table_combined)
+```
+
+First of all, what follows from the output is that car type is a significant predictor of miles per gallon $\beta$ = 7.24,\emph{t}(30) = 4.11,\emph{p} $<$ .001. On average, automatic cars have a lower miles per gallon than manual cars (\emph{M} = 17.14, \emph{SD} = 3.83 vs \emph{M} = 24.39, \emph{SD} = 6.17). In order to see how much variance is explained by the model, we could extract the Rsquared. The model has the following $R^2$ = 0.36 meaning that approximately 36 percent of the variation in miles per gallon is explained by the model. The next section will add the weight of the cars as a predictor, as well as the interaction between car type and weight.
+
+\subsection{Model 2}
+Below is displayed the output from the regressing miles per gallon on manual/automatic car type and the weight of a car.
+
+```{r, echo = FALSE}
+fit3 <- lm(mpg ~ factor(am) * wt, data = mtcars)
+summary(fit3)$coef
+Rsquared = summary(fit3)$r.squared
+
+```
+
+First of all, there is a significant main effect of car type on miles per gallon, $\beta$ = 14.88, \emph{t}(28) = 3.49, \emph{p} $<$ .01. The intercept for automatic cars is 31.41, while the coefficient for manual cars is 14.88 turning the intercept of manual cars to 46.29. This means that, in the case of a car with zero weight, it would have a fuel efficiency of 31.41 miles per gallon for automatic cars and 46.29 for manual cars. Second, there is a significant main effect of weight on miles per gallon, $\beta$ = -3.79, \emph{t}(28) = -4.82, \emph{p} $<$ .001. The miles per gallon decreases by 3.79 per pound increase in weight for automatic cars as this is the reference category. Third, there is a significant interaction effect of weight and car type on miles per gallon, $\beta$ = -5.30, \emph{t}(28) = -3.67,\emph{p} $<$ .01. This is demonstrated by the difference in slope of automatic and manual cars for the relationship between weight and fuel efficiency. The slope for automatic cars is -3.79 and for manual cars it is -9.08. Finally, in order to see how much variance is explained by the model (including car type, weight and the interaction between car type and weight to predict the miles per gallon of a car), one could take a glance at the $R^2$. The model has the following $R^2$ = 0.83. This means that approximately 83\% of the variance is explained by the model.
+
+\subsection{Model selection}
+Although all the predictors included in the last model are significant, one could ask whether this more complicated model is preferred to the simpler model with only car type. The widely endorsed Ockham's razor, for instance, attaches much importance to parsimony. In order to test this, we could use nested model testing. The following output displays the results of comparing the first and the second model.
+
+```{r, echo = FALSE}
+anova(fit1,fit3)
+```
+
+The F test is highly significant, meaning that the second model is preferred to the first model, \emph{F}(2, 28) = 39.68, \emph{p} $<$ .001. The second model will therefore be used to predict miles per gallon of all sorts of different cars in the future.
+
+\section{Diagnotics}
+The following section will display the residual plots and its interpretation.
+
+```{r, echo = FALSE, fig.width = 8, fig.height=5}
+library(MASS)
+res<-resid(fit3)
+qplot(x = predict(fit3),y = res,geom = "point", label = rownames(mtcars)) + 
+  geom_abline(intercept = 0, slope = 0,colour = "red") + 
+  ylab("Residuals") +
+  xlab("Predicted Values") +
+  geom_text(size = 3.4, alpha = 0.7) 
+  
+#studres(fit3)
+```
+
+Above is displayed the residual plot for the second model with the 2 main effects and the interaction effect. In this plot the predicted values are to be found on the x axis while the residuals are plotted on the y axis. Most values are evenly and randomly distributed above and below the red abline. This firstly suggests that a linear trend fits the data reasonably well. In additon, the residuals don't seem toh ave a funnel shape, suggesting that there is no indication of heteroscedasticity. The observation of the Fiat128 in the top right looks slightly like an outlier. In order to verify this, the studentized residuals have been calculated. Studentized residuals with a value over 3 are possible outliers. The observation however has a studentized residual of 2.7, suggesting this is no outlier.  All in all, the residual plot does not suggest that there are any major problems with the model.
+
+\section{Conclusion}
+All in all, my final model for predicting the miles per gallon of cars includes the predictors of car type, weight and the interaction of these two variables. This model explains approximately 83\% of the variation in the miles per gallon of all the different cars. By all means, the limitations of this model should be noted. Although 83\% of the variation explained is high, the researchers could obviously have tested more or different models. However, a model with only 3 predictors that explains that much variance in the data is considered both powerful and parsimonious. I am therefore of the opinion that this model will effectively predict the miles per gallon of future cars as well as providing potential researchers who are interested in the predictions of miles per gallon of cars with an easily interpretable model.
+
