@@ -1,0 +1,220 @@
+---
+title: "Predictive machine learning"
+author: "Bobby den Bezemer"
+date: "24 oktober 2015"
+output: html_document
+---
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of this project is to predict the manner in which these participants did the exercise.
+
+## Downloading the data
+
+This sections downloads the data to my local computer and then loads it into R. Note that I load the data into R setting missing values and values with a weird format directly to NA.
+
+```{r, echo = TRUE, warning = FALSE, message = FALSE}
+library(knitr)
+opts_chunk$set(warning = FALSE, message = FALSE)
+
+# Necessary packages
+library(caret)
+library(htmlTable)
+library(rattle)
+library(dplyr)
+library(rpart)
+
+# Downloading the data
+downloadDataset <- function(URL="", destFile="", directory = NULL){
+  if (class(URL) != "character" | class(destFile) != "character"){
+    stop("Input needs to be character strings")
+  }
+  if (!is.null(directory)){
+    destFile = paste(directory, "/", destFile, sep = "")
+  }
+  if(!file.exists(destFile)){
+    download.file(URL, destFile)
+  }else{
+    message("Dataset already downloaded.")
+  }
+}
+# Provide URLs
+trainURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# Download the data
+downloadDataset(trainURL, "pml-training.csv", "C:/Users/Bobby/Documents/MOOCS/datasciencecoursera/predictive_machine_learning/data")
+downloadDataset(testURL, "pml-testing.csv", "C:/Users/Bobby/Documents/MOOCS/datasciencecoursera/predictive_machine_learning/data")
+
+# Loading data into R session
+setwd("C:/Users/Bobby/Documents/MOOCS/datasciencecoursera/predictive_machine_learning/data")
+training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!", "") )
+evaluation_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!", "") )
+
+```
+
+## Data partitioning
+
+This section divides the dataset in a training and a test set. It uses a 60 40 split as was introduced during the class.
+
+```{r, echo = TRUE}
+inTrain <- createDataPartition(y = training_data$classe,
+                               p = 0.6, list = FALSE)
+trainingDat <- training_data[inTrain,]
+testingDat <- training_data[-inTrain,]
+
+```
+
+## Data cleaning
+
+I will perform the following steps in the cleaning process:
+
+1. Remove variables with near zero variance
+2. Remove variables with too many NAs (>5%)
+
+After executing the code as described below, we keep 82 columns. 
+
+```{r, echo = TRUE}
+zero_var <- nearZeroVar(trainingDat)
+
+# Exclude variables with zero var
+trainingDat <- trainingDat[,-zero_var]
+
+# Exclude ID variable
+trainingDat <- trainingDat[,-1]
+
+# Remove variables with NAs
+sumsNa <- colSums(is.na(trainingDat))
+fivePerc <- 0.05 * nrow(trainingDat)
+above5 <- names(which(sumsNa > fivePerc))
+trainingDat <- trainingDat[,!colnames(trainingDat) %in% above5]
+
+# Applying same transformations on testing data
+testingDat <- testingDat[,-zero_var]
+testingDat <- testingDat[,-1]
+testingDat <- testingDat[,!colnames(testingDat) %in% above5]
+```
+
+## Exploratory data analysis
+
+This section shows the distribution of the class variable in a table.
+
+```{r, echo = TRUE}
+
+s <- summary(trainingDat$classe)
+
+htmlTable(s,
+          header =  paste("class", names(s)),
+          caption = "<h3 style='text-align:center'>Number of class cases </h3>",
+          css.cell = "padding-left: 2em; padding-right: 2em", align.header = "c",
+          align = "ccccc")
+
+```
+
+## Background: Bias / variance trade-off
+
+The purpose of this section is to make the reader familiar with the terms bias and variance. These terms will be continuously used throughout the text, so it is good to have any idea what they refer to.
+
+In order to minimize the test error of a given model that you have produced, one needs to achieve low variance and low bias. Variance here refers to the amount by which our model would change if we estimated it using a different training data set. If a method thus has high variance, then small changes in the training data can result in large changes in our model. Generally speaking, more flexible statistical have higher variance. High variance refers to overfitting, as the model we produce closely follows the data. As such, changing the data will change the model accordingly.
+
+Bias on the other hand refers to the error that is introduced by approximating a real-life problem which may be extremely complicated by a much simpler model. Linear regression for instance assumes that the relationship between the independent and dependent variable is roughly linear. This may however be an approximation and in real-life the relationship is usually more likely to be somewhat non-linear. By thus approximating this relationship, one introduces bias in the model.
+
+## Model building
+
+This section will deal with the construction of 3 different types of models, respectively decision trees, random forests and boosting. This section will also give the theoretical background behind these models.
+
+### Decision tree
+
+In this section I will make a decision tree for predicting the Classe variable. I will firstly introduce decision trees on a conceptual level. Secondly, I will make a decision tree model and use it to predict testing data labels.
+
+The idea behind decision trees is to iteratively split variables into non-overlapping regions called Rs, J distinct regions. For every prediction that falls into Rj we make the same predictions. The feature space is thus divided into boxes, in this case in high-dimensional rectangles. The goal of trees is to find the boxes, R1 until Rj that minimizes (yi - yhatRj)^2. Basically this comes down to selecting the predictor Xj and the cutpoint s such that splitting the predictor space into the regions {X| Xj < s} and {X | xj > s} leads to the greatest possible reduction in residual sum of squares. This process will stop after a certain criterion is reached, for instance until the non-overlapping regions are homogenous or small enough.
+
+The code to make a tree model on the training data is displayed below. As one can see from the confusion matrix which contains the training data labels and their predictions according to the model, the accuracy is 89.8%. This yields an in sample error of approximately 10%. As the model is fit using the training data, I would expect the out of sample error to be slighly higher than this. After all, the out of sample error is calculated using the testing data.
+
+```{r, echo = TRUE}
+# method = class because classe is factor
+modelTree <- rpart(classe ~ ., data = trainingDat, method="class")
+
+predictionsTraining <- predict(modelTree, trainingDat, type = "class")
+confusionMatrix(predictionsTraining, trainingDat$classe)
+
+fancyRpartPlot(modelTree)
+
+```
+
+we yield an accuracy of 89.15%, indicating that the out of sample error is only 11%. This is deemed pretty high for an easy to interpret model like a decision tree.
+
+```{r, echo = TRUE}
+# Predicting new values
+predictions <- predict(modelTree, testingDat, type = "class")
+
+confusionMatrix(predictions, testingDat$classe)
+
+```
+
+### Random forest
+
+In this section I will perform a random forest model for predicting the Classe variable. I will firstly introduce random forests on a conceptual level. Secondly, I will perform the random forest and use it to predict testing data labels.
+
+The idea behind a random forest is that, as decision trees suffer from high variance, one needs to get lower variance in order to improve prediction accuracy. As in bagging, by using random forests, we build a number of decision trees on bootstrapped training samples. In contrast to bagging however, each time a split in the tree is considered, a random sample of m predictors is chosen as split candidates from the full set of p predictors. For the given split, only m predictors can thus be considered. This small tweak thus decorrelates trees. When we average over all constructed trees, we obtain reduced variance.
+
+The code to perform a random forest is displayed below. As one can see from the output of the confusion matrix, we yield an accuracy of 99.95% on the testing data. This makes the out of sample error only .05%. This is a very high prediction accuracy.
+
+```{r, echo = TRUE, cache = TRUE, eval = FALSE}
+# method = class because classe is factor
+modelForest <- train(classe ~ ., data = trainingDat, method = "rf", prox = TRUE, 
+               trControl = trainControl(method = "cv", number = 4, allowParallel = TRUE))
+
+# Predicting new values
+predictions <- predict(modelForest, testingDat)
+
+confusionMatrix(predictions, testingDat$classe)
+
+```
+
+### Boosting
+
+In this section I will perform a boosting for predicting the Classe variable. I will firstly introduce boosting on a conceptual level. Secondly, I will use the boosting algorithm to predict testing data labels.
+
+In boosting, we grow the decision trees sequentially using information from the previously grown trees. Boosting does not involve boostrap sampling, instead each trees is fit on a modified version of the original data set. Unlike fitting a single large decision tree to the data, which amounts to fitting the data hard and potentially overfitting, we fit a decision tree to the residuals from the previous model. This means that we use the current residuals rather the outcome Y as the response. We then add this new decision tree into the fitted function in order to update the residuals. Each tree is rather small with just a few nodes, determined by the d parameter in the model. Furthermore, we use a shrinkage parameter lambda which controls the rate at which boosting learns. Lastly, the B parameter controls the number of trees that we fit to the data.
+
+The code is displayed below. As one can see from the output of the confusionMatrix, we yield an accuracy of 99.67%. This makes the out of sample error only .33%. This is a very high prediction accuracy, yet this prediction accuracy is lower than for the random forest that I constructed. I will therefore use the random forest as final algorithm to predict the labels of the evaluation data.
+
+```{r, echo = TRUE, cache = TRUE, eval = FALSE}
+modBoost <- train(classe ~., method = "gbm", data = trainingDat, verbose = FALSE,
+                  trControl = trainControl(method = "cv", number = 4, 
+                                           allowParallel = TRUE)) 
+
+# Predicting new values
+predictionsBoost <- predict(modBoost, testingDat)
+
+confusionMatrix(predictionsBoost, testingDat$classe)
+
+```
+
+## Testing algorithm on evaluation data
+
+In this section I will test the best performing algorith, i.e. the random forest, on the evaluation data. The random forest yielded 20 out of 20 correct responses on the testing data.
+
+```{r, echo = TRUE, cache = TRUE, eval = FALSE}
+# Apply same transformations to evaluation data
+clean_evaluation <- evaluation_data[,-zero_var]
+clean_evaluation <- clean_evaluation[,-1]
+clean_evaluation <- clean_evaluation[,!colnames(clean_evaluation) %in% above5]
+
+# Predict answers
+answers = predict(modelForest, clean_evaluation)
+answer = as.character(answers)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+
+```
+
