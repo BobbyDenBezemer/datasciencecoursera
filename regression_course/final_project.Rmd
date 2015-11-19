@@ -31,7 +31,7 @@ Motor Trend is the leading magazine on the automobile industry. In this article,
 \section{Exploratory analyses}
 To explore the data, several graphs have been made. Figure 1 shows the distribution of miles per gallon and the average miles per gallon. As can be seen that, the variable miles per gallon looks roughly normal (although there seems to be a slight deviation).
 
-```{r first_plot, echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
+```{r first_plot, echo = FALSE, include = FALSE}
 suppressWarnings(library(ggplot2))
 suppressMessages(library(gridExtra))
 suppressWarnings(library(plyr))
