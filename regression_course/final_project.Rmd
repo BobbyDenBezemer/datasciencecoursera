@@ -28,7 +28,7 @@ The current article proposes two models on the relationship between fuel efficie
 \section{Introduction}
 Motor Trend is the leading magazine on the automobile industry. In this article, we aim to investigate the relationship between different car types and fuel efficiency (miles per gallon). Second, it probes a second model expanding the earlier relationship by including the weight of cars as well as an interaction term of weight and car type. The report itself is written in Rmarkdown and expanded with customized latex. All graphs are included in the text to clarify the points being made to the reader. The reader is therefore suggested to evaluate the size of the paper as though it contains both text and the appendix (so a limit of 5 pages).
 
-Typing some new changes
+Typing some bull shit changes.
 
 \section{Exploratory analyses}
 To explore the data, several graphs have been made. Figure 1 shows the distribution of miles per gallon and the average miles per gallon. As can be seen that, the variable miles per gallon looks roughly normal (although there seems to be a slight deviation).
