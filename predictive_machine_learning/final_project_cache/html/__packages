@@ -1,0 +1,14 @@
+base
+lattice
+ggplot2
+caret
+knitr
+htmlTable
+RGtk2
+rattle
+dplyr
+rpart
+randomForest
+survival
+gbm
+plyr
